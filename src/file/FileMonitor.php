@@ -156,7 +156,7 @@ class FileMonitor
             return [
                 "pid" => $result[0],
                 "cpu" => $result[1],
-                "memory" => $result[2],
+                "memory" => trim($result[2],"\n"),
                 "ret" => true
             ];
         }

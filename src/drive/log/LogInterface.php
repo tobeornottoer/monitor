@@ -12,5 +12,5 @@ namespace drive\log;
 
 interface LogInterface
 {
-    public static function write(string $error_level,string $log);
+    public static function write(string $log_file,string $error_level,string $log);
 }

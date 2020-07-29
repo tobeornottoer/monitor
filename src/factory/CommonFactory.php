@@ -1,30 +1,31 @@
 <?php
 /**
- * Class HttpFactory
+ * Class CommonFactory
  * Created by PhpStorm.
  * Author: jw
- * Time:18:22
+ * Time:15:29
  * @package factory
  */
 
 namespace factory;
 
 
-class HttpFactory extends AbstractFactory
+class CommonFactory extends AbstractFactory
 {
-    public static function begin($object,$table,$conf=null)
+    public static function begin($object,$table,$conf=null,$key=null)
     {
         $process = new \Swoole\Process(function(\Swoole\Process $proc) use ($object,$table,$conf) {
             new $object($proc,$table,$conf);
         },false,1,true);
         $pid = $process->start();
-        self::$process["http"] = $process;
+        self::$process[$key] = $process;
         if($pid === false){
-            self::stdout("http_server is run fail");
+            self::stdout("{$key} monitor is run fail");
             return false;
         }else{
-            self::stdout("http_server is running...");
+            self::stdout("{$key} monitor is running...");
             return $pid;
         }
     }
+
 }

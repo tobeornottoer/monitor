@@ -17,10 +17,11 @@ class AbstractLog implements LogInterface
     const LOG_ERROR = "[ERROR]:";
 
     /**
+     * @param string $log_file
      * @param string $error_level
      * @param $log
      */
-    public static function write(string $error_level,string $log)
+    public static function write(string $log_file,string $error_level,string $log)
     {
         // TODO: Implement write() method.
     }

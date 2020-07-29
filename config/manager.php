@@ -14,6 +14,8 @@ return [
     "process" => [
         "file" => file\FileMonitor::class,
         "http" => http\Http::class,
+        "mysql" => mysql\Mysql::class,
+        "redis" => redis\Redis::class
     ],
 
 ];

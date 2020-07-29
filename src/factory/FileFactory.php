@@ -16,8 +16,9 @@ class FileFactory extends AbstractFactory
     {
         $process = new \Swoole\Process(function(\Swoole\Process $proc) use ($object,$table,$conf) {
             new $object($proc,$table,$conf);
-        },false,2,true);
+        },false,1,true);
         $pid = $process->start();
+        self::$process["file"] = $process;
         if($pid === false){
             self::stdout("file monitor is run fail");
             return false;

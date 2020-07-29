@@ -7,6 +7,7 @@
  */
 use drive\log\FileLog;
 use drive\log\AbstractLog;
+use factory\CommonFactory;
 
 class Manager
 {
@@ -42,8 +43,12 @@ class Manager
                     }else{
                         $val["common"] = [];
                     }
-                    $pid = $this->handle[$key]::begin($this->process[$key],$this->table,$val);
-                    $this->toLog(AbstractLog::LOG_NOTICE,"子进程ID：".$pid);
+                    if(!isset($this->handle[$key])){
+                        $pid = CommonFactory::begin($this->process[$key],$this->table,$val,$key);
+                    }else{
+                        $pid = $this->handle[$key]::begin($this->process[$key],$this->table,$val);
+                    }
+                    $this->toLog(AbstractLog::LOG_NOTICE,"{$key} 子进程ID：".$pid);
                     if($pid){
                         $this->child_pid[$key] = $pid;
                     }
@@ -55,23 +60,40 @@ class Manager
     }
 
     public function toLog($level,$message){
-        FileLog::write($level,$message);
+        if(isset($this->conf["log"]) && $this->conf["log"]["app"] == "ON"){
+            FileLog::write($this->conf["log"]["log_file"],$level,$message);
+        }
     }
 
-    /**
-     * 阻塞等待所有的子进程退出
-     * 避免出现僵尸进程
-     */
     public function execWait(){
-        $process_nums = count($this->child_pid);
-        for($i=0;$i<$process_nums;$i++){
-            $ret = \Swoole\Process::wait();
-            foreach($this->child_pid as $key => $pid){
-                if($ret["pid"] == $pid){
-                    $this->toLog(drive\log\AbstractLog::LOG_NOTICE,$key . "监控的子进程ID：" . $ret["pid"] . "已经退出,状态码：" . $ret["code"]);
+        /** 利用定时器，将主进程改为非阻塞模式，方便进程间收发信号 */
+        \Swoole\Timer::tick(86400000,function(){});
+        $this->execSignal();
+    }
+
+    public function execSignal(){
+        /**
+         * 当子进程退出时触发
+         * 避免出现僵尸进程
+         */
+        \Swoole\Process::signal(SIGCHLD, function ($sigo) {
+            while ($ret = \Swoole\Process::wait(false)) {
+                foreach($this->child_pid as $key => $pid){
+                    if($ret["pid"] == $pid){
+                        $this->toLog(drive\log\AbstractLog::LOG_NOTICE,$key . "监控的子进程ID：" . $ret["pid"] . "已经退出,状态码：" . $ret["code"]);
+                    }
                 }
             }
-        }
+        });
+        /**
+         * 当主进程被kill时，发送结束信号给子进程
+         */
+        \Swoole\Process::signal(SIGTERM,function(){
+            foreach($this->child_pid as $key => $pid){
+                \Swoole\Process::kill($pid,SIGTERM);
+            }
+            exit;
+        });
     }
 
 }
