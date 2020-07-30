@@ -1,18 +1,17 @@
 <?php
 /**
- * Class Redis
+ * Class Mysql
  * Created by PhpStorm.
  * Author: jw
- * Time:22:12
- * @package redis
+ * Time:19:59
+ * @package mysql
  */
 
-namespace redis;
+namespace mysql;
 
 
-class Redis
+class Mysql
 {
-
     //当前进程的对象
     public $process = null;
     public $conf = null;
@@ -20,7 +19,7 @@ class Redis
     public $log_lock = null;
     //共享内存
     public $table = null;
-    public $redis = null;
+    public $pdo = null;
 
     public function __construct($process,$table,$conf=null)
     {
@@ -31,27 +30,22 @@ class Redis
         if($conf["frequency"] < 1){
             $this->process->exit(0);
         }
-        swoole_set_process_name("monitor_redis");
+        swoole_set_process_name("monitor_mysql");
         $this->conf = $conf;
         if(isset($conf["log_file"]) && !empty($conf["log_file"])){
             $this->log_lock = new \Swoole\Lock(SWOOLE_FILELOCK,$conf["log_file"]);
         }
         $this->table = $table;
-        $this->redis = new \Redis();
         $this->connect();
         $this->run();
     }
 
     public function connect(){
         try {
-            $this->redis->pconnect($this->conf["host"],$this->conf["port"]);
-            if(isset($this->conf["password"]) && $this->conf["password"]){
-                $this->redis->auth($this->conf["password"]);
-            }
-            return true;
+            $dsn = "mysql:host={$this->conf["host"]};port={$this->conf["port"]};dbname={$this->conf["database"]}";
+            $this->pdo = new \PDO($dsn,$this->conf["user"],$this->conf["passwd"],array(\PDO::ATTR_PERSISTENT => true));
         }catch (\Exception $exception){
             $this->record($exception->getMessage(),"[ERROR]");
-            return false;
         }
     }
 
@@ -60,45 +54,35 @@ class Redis
     }
 
     public function execute(){
-        /**
-         * 是否存活
-         */
+        $result = [];
         try {
-            $alive = $this->redis->ping();
-            if($alive === false){
-                $this->connect();
-                $alive = true;
+            $handle = $this->pdo->query("show status like 'thread%'");
+            if($handle){
+                $data = $handle->fetchAll(\PDO::FETCH_ASSOC);
+                foreach($data as $k => $val){
+                    $result[$val["Variable_name"]] = $val["Value"];
+                }
+            }
+            $handle = $this->pdo->query("show variables like '%max_connections%'");
+            if($handle){
+                $data = $handle->fetchAll(\PDO::FETCH_ASSOC);
+                foreach($data as $k => $val){
+                    $result[$val["Variable_name"]] = $val["Value"];
+                }
             }
         }catch (\Exception $exception){
             $this->record($exception->getMessage(),"[ERROR]");
-            $alive = false;
         }
-        /**
-         * redis客户端连接数
-         * alive = true 时才执行
-         * redis拒绝连接个数 refuse
-         * redis 新建连接数 new_link 过多，说明过度地创建和销毁连接   短连接严重，或者连接池有问题
-         * redis 进程使用内存大小
-         */
-        $info = [];
-        if($alive){
-            $redis_info = $this->redis->info();
-            $info["clients"]  = $redis_info["connected_clients"]??0;
-            $info["refuse"] = $redis_info["rejected_connections"]??0;
-            $info["new_link"] = $redis_info["total_connections_received"]??"NAN";
-            $info["memory"] = $redis_info["used_memory_rss_human"]??"NAN";
-        }
-        $info["alive"] = $alive;
         $content = $this->getCpuAndMemory();
-        $content["content"] = $info;
-        $this->table->set("redis",[
+        $content["content"] = $result;
+        $this->table->set("mysql",[
             "content" => json_encode($content),
             "update_time" => time(),
         ]);
     }
 
     public function getCpuAndMemory(){
-        $command = "ps aux | grep monitor_redis | grep -v grep | awk '{print $2,$3,$6}'";
+        $command = "ps aux | grep mysqld | grep -v mysqld_safe | grep -v grep | awk '{print $2,$3,$6}'";
         $result = \Swoole\Coroutine\System::exec($command);
         if($result === false){
             return [
@@ -125,7 +109,7 @@ class Redis
         }
         $this->log_lock->lock();
         $fileHandle = fopen($this->conf["log_file"],"a");
-        fwrite($fileHandle,$level . " [redis] " . date("Y-m-d H:i:s") . "\n");
+        fwrite($fileHandle,$level . " [mysql] " . date("Y-m-d H:i:s") . "\n");
         fwrite($fileHandle,$log . "\n");
         fclose($fileHandle);
         $this->log_lock->unlock();

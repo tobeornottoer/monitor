@@ -39,7 +39,8 @@ class Http
     public function index($request,$response){
         $file = $this->table->get("file");
         $redis = $this->table->get("redis");
-        $html = "file:" . var_export($file,true) . "<br>" . "redis:" . var_export($redis,true);
+        $mysql = $this->table->get("mysql");
+        $html = "file:" . var_export($file,true) . "<br>" . "redis:" . var_export($redis,true) . "<br>" . "mysql:" . var_export($mysql,true);
         $response->end($html);
     }
 
