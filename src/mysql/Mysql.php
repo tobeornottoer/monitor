@@ -23,6 +23,7 @@ class Mysql
 
     public function __construct($process,$table,$conf=null)
     {
+        \Swoole\Runtime::enableCoroutine($flags = SWOOLE_HOOK_ALL);
         $this->process = $process;
         if(!is_array($conf)){
             $this->process->exit(0);
